@@ -1,41 +1,100 @@
-#ROLE
-You are a senior QA automation engineer / SDET working inside the current VS Code workspace. Complete this UI automation assessment end to end: inspect → analyze → document → write test cases → build automation → run → fix automation issues → record real defects. Do not just generate code.
+1 — Research prompt (Steps 1–3 → Application Analysis & Requirements.txt)
 
-TECH
-Playwright + TypeScript + Page Object Model (or match the stack already in the workspace). Run from the VS Code integrated terminal.
+```
+You are a senior QA analyst. I'm inspecting a static client-side web app (Train Reservation System). I'll paste the page HTML and its JS file for one module at a time. For each module, produce a structured analysis section containing:
 
-APPLICATION — Train Reservation System (static HTML + vanilla JS, no backend, no persistence)
-- Login:          https://webapps.tekstac.com/SeleniumApp1/TrainReservation/login.html
+1. Every interactive element with: element ID (or name/selector if no ID), element type (text input / dropdown / checkbox / button), and its label.
+2. Where each error renders: inline container (give the div id) vs native alert()/confirm() dialog.
+3. The REAL validation logic, read from the JS — not guessed from the UI. For each field state the exact trigger condition and the exact message string.
+4. Any behaviour quirks (redirects, auto-clearing messages, flags like secureCheck, functions that only fire on certain buttons).
+
+Module: [LOGIN]. Here is login.html:
+[PASTE HTML]
+Here is login.js:
+[PASTE JS]
+
+Output as a clean text section I can paste into Application Analysis & Requirements.txt. Be precise with IDs and message strings. No filler.
+
+```
+
+2 — Generation prompt (Step 2, acceptance criteria)
+
+```
+Act as a BA. Write acceptance criteria for user stories US-01 to US-26 of the Train Reservation System, grouped by module (Login US-01–09, Ticket Booking US-10–21, Enquiry US-22–26).
+
+Use Given/When/Then format. Base every criterion on these validation rules:
+
+LOGIN: Username must equal "admin" (blank→"Username cannot be empty", else→"Username is wrong"); Password must equal "admin" (blank→"Password cannot be empty", else→"Password is wrong"); Captcha field non-empty (blank→"Captcha code cannot be empty"); captcha Validate button must be clicked and typed text must match the 7-char generated code EXACTLY (case-sensitive) to set secureCheck=true; login success needs admin+admin+secureCheck→alert("Login Successful")→redirect to index.html; Remember-me confirm() OK→"Username and Password Saved Successfully!", Cancel→"Changes not saved!" (nothing persisted).
+
+TICKET BOOKING: 8 mandatory fields (Travel From, Travel To, Departure, Class dropdown, Passenger Name, Email, Phone, No. of Passengers), each with its "can't be blank" message concatenated via <br> into div#errfn; Class default option invalid→"DropDown can't be blank"; passengers "0"→"Number of Passengers can't be Zero"; fare = passengers × class price (ACSleeper 2500 / Sleeper 1250 / Seating 750), VAT=round(subtotal×0.02), total=subtotal+VAT, computed only by +/- buttons.
+
+ENQUIRY: Full name ≥3 chars; Email must contain both "." and "@"; Message ≥15 chars; validation is sequential with early return (only first failing field shows a message); success→"Thank you! We will get back to you as soon as possible." (auto-clears after 3s).
+
+Also write explicit criteria for rules the app does NOT enforce: booking email not format-validated, phone accepts non-digits, Departure date format not validated, passenger count has no upper bound. Keep it tight.
+
+```
+
+
+3 — Research prompt (Step 3, consolidated rules table)
+
+```
+Using the analysis and acceptance criteria above as context, produce a single consolidated validation-rules reference table for all three modules. Columns: Module | Field | Enforced rule | Exact error message | NOT enforced (gaps). Explicitly list every gap (email format, numeric phone, date format, passenger upper bound, captcha case-sensitivity edge cases). Output as a plain-text table for the .txt file.
+
+```
+
+4 — Generation prompt (Step 4 → testcases.csv)
+
+```
+
+You are a senior test designer. Generate 40–45 test cases covering ALL 26 user stories of the Train Reservation System. Use the validation rules and element IDs already established in this conversation as context.
+
+Distribution: Login 13 (US-01–09), Ticket Booking 19 (US-10–21), Enquiry 10 (US-22–26) — totalling 40–45, every user story covered.
+
+Priority mix:
+- 60–70% must be Negative/Validation scenarios at Critical or High priority.
+- Boundary cases = Medium: name of exactly 2 and 3 chars, message of exactly 14 and 15 chars, passenger count decremented below zero, class changed after count is set, case-altered 7-char security code.
+- Positive/success cases = Low.
+Include cases for the NON-enforced rules too (booking email with no @, non-numeric phone, bad date format, large passenger count).
+
+Output ONLY a CSV with EXACTLY these columns in this order:
+TC_ID, Module, User_Story_ID, Test_Scenario, Test_Type, Priority, Precondition, Test_Steps, Test_Data, Expected_Result, Actual_Result, Status
+
+Rules: TC_ID sequential (TC_001…). Test_Steps numbered inside the cell. Expected_Result must quote the exact message string. Leave Actual_Result empty and set Status = "Not Executed". Quote any field containing commas. No commentary before or after the CSV.
+
+```
+
+5 — Code prompt (Step 5, automation framework)
+
+```
+Stack: Selenium WebDriver + Java + TestNG + Maven, Page Object Model.
+(Change this one line if you're using Playwright/Cypress or another language — keep the rest.)
+
+Build a complete automation framework for the Train Reservation System on top of my existing workspace (do NOT restructure it). URLs:
+- Login: https://webapps.tekstac.com/SeleniumApp1/TrainReservation/login.html
 - Ticket Booking: https://webapps.tekstac.com/SeleniumApp1/TrainReservation/index.html
-- Enquiry:        https://webapps.tekstac.com/SeleniumApp1/TrainReservation/contactus.html
-- Credentials: admin / admin. Login is NOT enforced — index.html and contactus.html open directly; still test login.html on its own.
-- Native dialogs (handle as browser dialogs, not DOM): captcha Validate → alert "Please Enter The code"/"Valid input"/"invalid input"; login success → alert "Login Successful" then redirect to index.html; Remember me → confirm() (OK = "Username and Password Saved Successfully!", Cancel = "Changes not saved!", nothing stored).
+- Enquiry: https://webapps.tekstac.com/SeleniumApp1/TrainReservation/contactus.html
 
-SCOPE
-Login US-01–09 | Ticket Booking US-10–21 | Enquiry US-22–26.
+Deliver:
+1. Browser setup/teardown (base test class).
+2. One page object per module: LoginPage, BookingPage, EnquiryPage. Use these locators: [PASTE YOUR ELEMENT IDs PER FIELD].
+3. Reusable helpers:
+   - Alert/confirm handler (accept/dismiss native dialogs, read alert text).
+   - "fill all valid fields except X" helper for the booking form.
+   - A login helper that: enters admin/admin, reads the LIVE captcha from element #code, types it, clicks Validate, accepts the "Valid input" alert, then clicks Login. The captcha regenerates on every load, so it must be read at runtime — never hard-coded.
+4. At least 25 test methods with assertions (≥7 per module). Prioritise Critical/High negative validations over happy paths. Assert the exact message strings. For booking, remember all 8 errors concatenate with <br> into div#errfn. For fare, trigger calculateTotal via the +/- buttons and assert subtotal/VAT/total against ACSleeper 2500 / Sleeper 1250 / Seating 750 with VAT=round(subtotal×0.02).
 
-VALIDATION RULES (expected behaviour = assertion oracle)
-Login: blank username → "Username cannot be empty", wrong → "Username is wrong"; blank password → "Password cannot be empty", wrong → "Password is wrong"; blank captcha → "Captcha code cannot be empty"; must click Validate and match the 7-char code in #code EXACTLY (case-sensitive) to set secureCheck=true; success needs admin + admin + secureCheck.
-Ticket Booking (all 8 fields mandatory; failures concatenated with <br> into div#errfn): blank Travel From/Travel To/Departure/Passenger Name/Email/Phone → "<Field> can't be blank"; Class = default → "DropDown can't be blank"; Passengers = "0" → "Number of Passengers can't be Zero". NOT enforced (tests must expect these ACCEPTED): email format, digit/length phone, date format, passenger bounds, letters-only names. Fare: subtotal = passengers × price (ACSleeper 2500 / Sleeper 1250 / Seating 750); VAT = round(subtotal×0.02); total = subtotal+VAT; recalculated ONLY by the +/- buttons.
-Enquiry (sequential, early return — only the first failing field shows a message): name < 3 → "Your name should be at least 3 characters long."; email must contain "." and "@" → "Please enter a valid email address."; message < 15 → "Please write a valid message in few words."; success "Thank you! We will get back to you as soon as possible." auto-clears after ~3s.
+Follow standard naming conventions. Produce the full file tree and the code for each file.
+```
 
-STEPS
-1. Inspect all 3 live pages AND their JS (login.js / script.js / contact.js) to get the REAL element IDs, field types and error containers (inline divs vs alerts). Submit empty/invalid forms to observe behaviour. Do not guess selectors.
-2. Write acceptance criteria for US-01–26, grouped by module.
-3. Document all field rules, including the ones NOT enforced. Save Steps 1–3 in "Application Analysis & Requirements.txt".
-4. Generate 40–45 test cases in testcases.csv covering all 26 stories. Columns exactly: TC_ID, Module, User_Story_ID, Test_Scenario, Test_Type, Priority, Precondition, Test_Steps, Test_Data, Expected_Result, Actual_Result, Status. ~60–70% negative (Critical/High), boundary Medium, positive Low. Suggested split: Login 13, Booking 19, Enquiry 10.
-5. Build the framework: one page object per module (Login, Ticket Booking, Enquiry); a login helper (read #code live, type it, click Validate, accept the alert, click Login); an alert/confirm handler; a "fill all valid except X" helper. ≥25 test methods with assertions (≥7 per module); prioritise negative/validation.
-6. Run from the terminal and refine from real results (expect first-run issues around the captcha alert and fare timing). Fix automation issues; don't weaken valid assertions just to pass.
-7. Record EXACTLY 8 defects (≥2 per module) in defects/defect_report.json, each with what was entered, what happened, expected result, severity, priority. Defects must come from real runs.
+7 — Generation prompt (Step 7 → defects/defect_report.json)
 
-DELIVERABLES
-- Application Analysis & Requirements.txt
-- testcases.csv (40–45 cases, all 26 stories, exact columns)
-- Automation codebase (3 page objects + login helper + alert/confirm handler)
-- defects/defect_report.json (exactly 8 defects, ≥2 per module)
+```
 
-RULES
-- Don't change the workspace structure; no redundant files.
-- Don't fabricate IDs, selectors, behaviour, results or defects — inspect the live app first. If the browser can't reach the app, STOP and say so.
-- Only 3 Evaluate attempts: use them at ~50%, ~90%, and final.
-- Work autonomously through all 7 steps without pausing for confirmation. Start by inspecting the workspace and the live pages; don't immediately generate code.
+From my ACTUAL test-run results below (not predictions), produce a single consolidated defect report at defects/defect_report.json. Document exactly 8 validation defects, at least 2 per module.
+
+My observed results:
+[PASTE WHAT YOU ACTUALLY SAW: input used, actual behaviour, which test, which module]
+
+JSON: an array of defect objects, each with: id, module, user_story_id, summary, input_entered, actual_result, expected_result, severity, priority. Likely real defects to look for: booking accepts email with no @/domain, phone accepts letters, Departure accepts non-date text, passenger count decrements below zero, enquiry sequential early-return hides later errors, captcha case-sensitivity. Output valid JSON only.
+
+```
