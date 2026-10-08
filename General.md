@@ -1,63 +1,143 @@
-Tekstac UI Automation — Fixed Prompt Sequence (Playwright + TypeScript, GitHub Copilot)
+# Tekstac UI Automation â€” Fixed Prompt Sequence (Playwright + TypeScript, GitHub Copilot)
+
 A 7-prompt sequence for the Tekstac AI-Augmented QA UI-automation assessments (Train Reservation, Library Portal, SmartUniversity, ParaBank, and so on). It is adaptive: Prompt 1 makes the agent discover the modules, URLs, user-story ranges, and validation behaviour from the workspace files and the live app, so you do not need to know the exact question in advance. The framework is always Playwright + TypeScript + Page Object Model.
+
 How to use
-Fill STEP 0 (FACTS) from the question on your screen — just the numbers that carry weightage. Leave anything blank and the agent will read it from the workspace in Prompt 1.
+
+Fill STEP 0 (FACTS) from the question on your screen â€” just the numbers that carry weightage. Leave anything blank and the agent will read it from the workspace in Prompt 1.
+
 Send Prompt 1 through Prompt 7 in order, one at a time, in Copilot chat. Let each finish before sending the next. Copy the plain text under each Prompt heading.
+
 Run Tekstac Evaluate at about 50 percent (after Prompt 4 to 5), about 90 percent (after Prompt 6), and once at the end (after Prompt 7). You get only 3 attempts.
+
 The assessment grades two things: what you analysed and shared with AI, and how you directed your prompts. Each step below is a distinct research, generation, code, or refinement prompt so this is visible.
+
 Notes
-Stack is fixed: Playwright + TypeScript + Page Object Model only — no other tool or language. Build on top of the existing workspace; never rename or restructure it.
+
+Stack is fixed: Playwright + TypeScript + Page Object Model only â€” no other tool or language. Build on top of the existing workspace; never rename or restructure it.
+
 Deliverable names must match the assessment exactly. Both sample exams use testcases.csv and defects/defect_report.json. If your exam states different names or counts, put them in STEP 0 and the prompts will use them.
-Headed vs headless: the prompts run headed (headless: false) so you can watch the browser. If the exam machine has no display and tests will not launch, switch to headless: true — the JSON and HTML report, screenshots, and traces are the real evidence either way.
+
+Headed vs headless: the prompts run headed (headless: false) so you can watch the browser. If the exam machine has no display and tests will not launch, switch to headless: true â€” the JSON and HTML report, screenshots, and traces are the real evidence either way.
+
 Reports: Playwright's built-in JSON and HTML reporters always work. Allure (allure-playwright) is added only if it installs (needs network); do not block on it.
-STEP 0 — FACTS (type these from the on-screen question; blanks are fine)
+
+---
+
+## STEP 0 â€” FACTS (type these from the on-screen question; blanks are fine)
+
 System name: ______
+
 Modules (count and names): ______
+
 User-story range(s): US-__ to US-__ (per-module split if shown)
+
 Required test-case count: ______ (sample exams: 40 to 45)
+
 Required automated test methods: ______ (sample exams: at least 25, or exactly 30)
+
 Required defect count: ______ (sample exams: exactly 8 with at least 2 per module, or exactly 5)
+
 Login or captcha present: ______ (type, for example arithmetic result box / N-character text code / none)
+
 Special gate: ______ (for example drag-and-drop human verification / none)
+
 Test-case file name: testcases.csv
+
 Defect file path: defects/defect_report.json
+
 The agent will confirm and complete all of these from the workspace and the live app in Prompt 1.
-Prompt 1 — Research, Inspect and Analyze (no code yet)
+
+---
+
+## Prompt 1 â€” Research, Inspect and Analyze (no code yet)
+
 You are a senior QA automation engineer and SDET working inside this VS Code workspace. Do not write automation or test code yet.
+
 First, read every requirement and user-story file already in this workspace (for example User Stories.txt and any assessment or readme files). From them, list the system name, each module, its page URL, and its user-story range. Treat the workspace user stories as the source of truth.
+
 Then inspect the live application yourself. Write one throwaway Playwright script, saved under a temp or scratch folder and deleted when done, that opens each module URL and prints, for every input, select, textarea, button, radio, checkbox, and every element that has an id, its tag, id, name, type, value, and visible text, and also flags any duplicate ids on the page. Also fetch and read in full every linked .js and .css file for each page. Run the script from the integrated terminal and read its output.
+
 From the live DOM and JS, not from guesses, record for each module: the exact id or most reliable selector for every field and button; field types and any dynamic behaviour such as dependent fields that reveal, auto-filled or read-only values, dropdown option values, and radio-driven paths; where errors render inline, giving the container id, versus as native alert or confirm dialogs; the real validation logic, including fields that look validated but are not, such as email format, digit or length phone, numeric or positive number, and date format; if there is a captcha, its type (arithmetic result box or N-character text code), the element that holds it, and exactly how the app checks it; and if there is a drag-and-drop or human-verification gate, the draggable element and the drop-zone selector.
+
 Give me a concise findings summary grouped by module. Do not fabricate anything. If any page or JS file will not load, say exactly what failed and stop.
-Prompt 2 — Acceptance Criteria
+
+---
+
+## Prompt 2 â€” Acceptance Criteria
+
 Act as a Business Analyst. Using your Prompt 1 findings and the workspace user stories as the source of truth, write Given/When/Then acceptance criteria for every user story across all modules, grouped by module and traceable to the validation rules.
+
 For each module also write a short end-to-end flow: what a valid journey looks like, field by field, through to the success state, for example a success banner, an ID card, a confirmation table, or a redirect.
+
 Save all of this to a file named exactly Application Analysis & Requirements.txt, creating it if missing and appending if it exists, with clear per-module sections. Press Ctrl+S.
-Prompt 3 — Validation Rules
-Using the analysis and acceptance criteria above as context, produce one consolidated field-level validation-rules table covering every field in every module. For each field give the rule, the exact error message, and whether the app actually enforces it — explicitly mark the rules it does not enforce, for example email format, digit or length phone, numeric or positive values, and date format. Express the key rules in Gherkin where it helps.
+
+---
+
+## Prompt 3 â€” Validation Rules
+
+Using the analysis and acceptance criteria above as context, produce one consolidated field-level validation-rules table covering every field in every module. For each field give the rule, the exact error message, and whether the app actually enforces it â€” explicitly mark the rules it does not enforce, for example email format, digit or length phone, numeric or positive values, and date format. Express the key rules in Gherkin where it helps.
+
 Append this as a Validation Rules section to Application Analysis & Requirements.txt. Press Ctrl+S.
-Prompt 4 — Test Case Design
+
+---
+
+## Prompt 4 â€” Test Case Design
+
 Act as a senior test designer. Generate the number of test cases the assessment requires (use the stated count, for example 40 to 45) covering all user stories across all modules. Save them to a CSV named exactly as the assessment requires (default testcases.csv).
+
 Columns, in this exact order: TC_ID, Module, User_Story_ID, Test_Scenario, Test_Type, Priority, Precondition, Test_Steps, Test_Data, Expected_Result, Actual_Result, Status.
+
 Rules: every user story must appear at least once; 60 to 70 percent must be negative or validation cases at Critical or High priority; boundary and format-gap cases at Medium, such as a value exactly at a minimum length, a count decremented below zero, an option changed after a dependent value is set, an alphabetic phone, an email with no at-sign or no TLD, and a verification-gate bypass attempt; positive and success cases at Low; include cases that assert the non-enforced rules accept bad input; leave Actual_Result and Status blank until execution; make the CSV RFC 4180 clean by wrapping any field that contains a comma or line break in double quotes and doubling any internal quotes. Press Ctrl+S.
-Prompt 5 — Automation Framework
-Build a complete Playwright and TypeScript solution using the Page Object Model, on top of the existing workspace structure. Do not rename, move, or restructure anything already there, and do not create redundant files. Use only Playwright and TypeScript — no other tool or language.
-Include a playwright.config.ts with baseURL set to the app's base URL, trace, screenshot, and video enabled on failure, the built-in JSON and HTML reporters, and allure-playwright added only if it installs cleanly without blocking. Create one page object per module using the real selectors you found in Prompt 1, not guesses. Create reusable helpers: a dialog handler that registers the alert or confirm listener before the click, asserts the dialog message, then accepts or dismisses it, and fails on unexpected dialogs; a fill-all-valid-fields-except-X data helper driven by one valid-data fixture; and only the gate helpers this app actually needs — a login and captcha helper that reads the live captcha, types it, clicks Validate, accepts the alert, and submits, and/or a drag-and-drop helper for a verification gate.
+
+---
+
+## Prompt 5 â€” Automation Framework
+
+Build a complete Playwright and TypeScript solution using the Page Object Model, on top of the existing workspace structure. Do not rename, move, or restructure anything already there, and do not create redundant files. Use only Playwright and TypeScript â€” no other tool or language.
+
+Include a playwright.config.ts with baseURL set to the app's base URL, trace, screenshot, and video enabled on failure, the built-in JSON and HTML reporters, and allure-playwright added only if it installs cleanly without blocking. Create one page object per module using the real selectors you found in Prompt 1, not guesses. Create reusable helpers: a dialog handler that registers the alert or confirm listener before the click, asserts the dialog message, then accepts or dismisses it, and fails on unexpected dialogs; a fill-all-valid-fields-except-X data helper driven by one valid-data fixture; and only the gate helpers this app actually needs â€” a login and captcha helper that reads the live captcha, types it, clicks Validate, accepts the alert, and submits, and/or a drag-and-drop helper for a verification gate.
+
 Login logic: if the app gates its modules behind login, log in first via the helper; if login is not enforced or there is no login, navigate directly, but still cover the Login module's own user stories if one exists.
-Implement the exact number of automated test methods the assessment requires, with a sensible per-module split, each with meaningful assertions, prioritising Critical and High validations over happy paths. Tag each test with its TC_ID. Use no hard sleeps — use web-first assertions, and assert any auto-clearing success message immediately after the action. Run headed (headless: false) so I can watch the browser; if the machine has no display and tests will not launch, fall back to headless. Press Ctrl+S.
-Prompt 6 — Execute, Self-Heal and Classify Failures
-Run the full suite from the integrated terminal. Do not assume anything passes — read the actual results. Work autonomously: do not ask me what to do, keep going until the suite is stable.
-For every failing test, first re-inspect the relevant live page by re-reading its DOM and JS — open it again and dump the elements if needed — diagnose the exact root cause, then classify the failure into one of two buckets.
+
+Implement the exact number of automated test methods the assessment requires, with a sensible per-module split, each with meaningful assertions, prioritising Critical and High validations over happy paths. Tag each test with its TC_ID. Use no hard sleeps â€” use web-first assertions, and assert any auto-clearing success message immediately after the action. Run headed (headless: false) so I can watch the browser; if the machine has no display and tests will not launch, fall back to headless. Press Ctrl+S.
+
+---
+
+## Prompt 6 â€” Execute, Self-Heal and Classify Failures
+
+Run the full suite from the integrated terminal. Do not assume anything passes â€” read the actual results. Work autonomously: do not ask me what to do, keep going until the suite is stable.
+
+For every failing test, first re-inspect the relevant live page by re-reading its DOM and JS â€” open it again and dump the elements if needed â€” diagnose the exact root cause, then classify the failure into one of two buckets.
+
 Bucket A, the failure is caused by the automation: a wrong or stale selector, a missing or wrong wait, an alert or confirm dialog not handled, a gate or login step not passed, wrong test data, or a bad assertion that does not match the app's correct behaviour. Fix the script and re-run that test. Repeat the inspect, fix, re-run loop until every Bucket A test passes. Every automation-caused failure must end up passing.
+
 Bucket B, the test is correct but the application genuinely misbehaves: it accepts input it should reject, shows the wrong error or no error, miscalculates, lets a gate be bypassed, and so on. This is a real defect and a success for your testing, not something to hide. Do not weaken, delete, or flip the assertion to make it green. Confirm the misbehaviour by re-running and by direct inspection, keep the failing test and its evidence (screenshot or trace), and note it for the defect report.
-Keep looping until there are no unexplained failures left: every remaining failure is a confirmed Bucket B application defect, and everything else passes. Then give me a short run summary — total, passed, failed — and list which failures are confirmed real application defects, with a one-line reason for each. Press Ctrl+S.
-Prompt 7 — Defect Report
+
+Keep looping until there are no unexplained failures left: every remaining failure is a confirmed Bucket B application defect, and everything else passes. Then give me a short run summary â€” total, passed, failed â€” and list which failures are confirmed real application defects, with a one-line reason for each. Press Ctrl+S.
+
+---
+
+## Prompt 7 â€” Defect Report
+
 From the actual results of the run you just executed, not from predictions, produce one consolidated defect report at exactly defects/defect_report.json. Document exactly the number of defects the assessment requires, for example 8 with at least 2 per module, or 5, each taken from a test that actually reproduced it.
+
 Each defect object has these fields: id, module, user_story_id, related_tc_id, summary, input_entered, steps, actual_result, expected_result, severity, priority, evidence (test name plus screenshot or trace path), and status. Output valid JSON only, as an array of these objects.
-If you do not yet have enough confirmed real failures to reach the required count, design and run more targeted negative and boundary tests first to surface additional genuine defects — do not invent defects to reach the number. Likely real defects to look for: email accepted with no at-sign or no TLD; phone accepts letters or any length; a date, age, or number field accepts non-date or non-numeric text; a count decremented below zero; sequential early-return validation hiding later field errors; captcha case-sensitivity; verification-gate bypass; and a read-only or auto-filled amount not recalculating after a dependent change.
+
+If you do not yet have enough confirmed real failures to reach the required count, design and run more targeted negative and boundary tests first to surface additional genuine defects â€” do not invent defects to reach the number. Likely real defects to look for: email accepted with no at-sign or no TLD; phone accepts letters or any length; a date, age, or number field accepts non-date or non-numeric text; a count decremented below zero; sequential early-return validation hiding later field errors; captcha case-sensitivity; verification-gate bypass; and a read-only or auto-filled amount not recalculating after a dependent change.
+
 Press Ctrl+S, then run Tekstac Evaluate.
-Final checklist (have the agent confirm before you submit)
+
+---
+
+## Final checklist (have the agent confirm before you submit)
+
 Application Analysis & Requirements.txt exists with per-module analysis, element IDs, acceptance criteria, and the validation-rules table.
+
 The test CSV has the exact name, the exact columns, the required count, every user story, and 60 to 70 percent negative at the right priorities.
+
 One page object per module plus the required helpers; the required number of test methods; meaningful assertions; the last full run green except for the confirmed real-defect tests.
+
 defects/defect_report.json is valid JSON with the exact required defect count and per-module minimum, every item traceable to an executed test.
+
 Workspace structure unchanged; no redundant files; everything saved with Ctrl+S.
