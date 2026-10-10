@@ -1,70 +1,153 @@
-Tekstac API Automation — Fixed Prompt Sequence (REST/JSON, GitHub Copilot or Claude)
-A 7-prompt sequence for the Tekstac AI-Augmented QE API-automation assessments, built on the same scored skeleton as the UI assessments (Train Reservation, ParaBank, SmartUniversity, College Social Network). It is adaptive: Prompt 1 makes the agent discover the endpoints, base URL, auth flow, user-story ranges, and the real validation behaviour from the workspace spec and the live API, so you do not need the exact question in advance.
-Default stack is Playwright API testing (the request fixture) + TypeScript with a Service Object Model (the API equivalent of the Page Object Model). This keeps parity with your UI toolchain. It is swappable — REST Assured + Java, pytest + requests, Supertest + Jest, or Karate — and Prompt 1 detects and adopts whatever framework the workspace already ships with.
-How to use
- * Fill STEP 0 (FACTS) from the question on your screen — just the numbers and the auth type that carry weightage. Leave anything blank and the agent will read it from the workspace in Prompt 1.
- * Send Prompt 1 through Prompt 7 in order, one at a time, in your AI chat. Let each finish before sending the next. Copy the plain text under each Prompt heading.
- * Run Tekstac Evaluate at about 50 percent (after Prompt 4 to 5), about 90 percent (after Prompt 6), and once at the end (after Prompt 7). You get only 3 attempts.
- * The assessment grades two things: what you analysed and shared with AI, and how you directed your prompts. Each step below is a distinct research, generation, code, or refinement prompt so this is visible.
-Notes
- * Stack is adaptive but defaults to Playwright + TypeScript with a Service/Client Object Model — no page objects, no browser. Build on top of the existing workspace; never rename or restructure it.
- * There is no DOM and no screenshots here. "Inspection" means hitting endpoints and reading the actual status codes, response bodies, headers, and schemas. Evidence is the saved request/response pairs plus the JSON and HTML report and the terminal logs.
- * Deliverable names must match the assessment exactly. The UI exams use testcases.csv and defects/defect_report.json — assume the same unless your exam states otherwise, in which case put the real names in STEP 0.
- * Reports: Playwright's built-in JSON and HTML reporters always work (or the equivalent in whatever framework the workspace uses — TestNG/Surefire + Allure for REST Assured, pytest-html for pytest, etc.). Do not block on an optional reporter that needs network.
- * If the service is SOAP/XML rather than REST/JSON, keep the same seven steps but swap JSON-schema validation for XML/XSD validation and assert on SOAP Fault elements instead of HTTP status codes. Everything below assumes REST/JSON.
-STEP 0 — FACTS
-(Type these from the on-screen question; blanks are fine. The agent will confirm and complete all of these from the workspace and the live API in Prompt 1.)
- * API / system name: ______
- * Modules (resource groups, count and names): ______
- * Base URL (and environment, if given): ______
- * User-story range(s): US-__ to US-__ (per-module split if shown)
- * Required test-case count: ______ (UI exams use 40 to 45, or 60+)
- * Required automated test methods: ______ (UI exams use at least 20, or at least 25)
- * Required defect count: ______ (UI exams use exactly 8 with at least 2 per module, or 5)
- * Auth type: ______ (for example Bearer / JWT, API-key header, Basic, OAuth2 client-credentials, session cookie, none) and login/token endpoint if known: ______
- * Spec / contract present: ______ (OpenAPI or Swagger URL or file, Postman collection, WSDL, README — or none)
- * Test-case file name: testcases.csv
- * Defect file path: defects/defect_report.json
- * Framework / language: ______ (default Playwright + TypeScript; blank = detect from workspace)
-Prompt 1 — Research, Inspect and Analyze (no code yet)
-You are a senior QA automation engineer and SDET working inside this VS Code workspace. Do not write automation or test code yet.
-First, read every requirement, user-story, and contract file already in this workspace — for example User Stories.txt, any OpenAPI or Swagger file, any Postman collection, any README or assessment file. From them, list the API name, each module or resource group, every endpoint it exposes with its HTTP method and path, and its user-story range. Treat the workspace user stories as the source of truth. Then detect the framework, language, and folder structure that already exist in the workspace and plan to build on them exactly; if the workspace is an empty scaffold, use Playwright and TypeScript with a Service Object Model.
-Then inspect the live API yourself. Write one throwaway script, saved under a temp or scratch folder and deleted when done, that for every endpoint sends a representative set of requests — a valid request, an invalid one with a missing required field, one with a wrong data type, one with no authentication, and one with a bad or expired token — and prints for each: the method, the full URL, the request headers and body, the response status code, the response headers (especially Content-Type), and the full response body. Resolve the authentication flow end to end in the same script: call the login or token endpoint, capture the token, show exactly which header carries it and in what format, then prove a protected endpoint succeeds with that token and fails without it. Run the script from the integrated terminal and read its output.
-From the actual responses, not from guesses, record for each module and endpoint: the method, path, and any path or query parameters; the required versus optional request-body fields and their data types; the exact success status code and the success response schema; the exact error status code and the error response schema or message shape; which validations the server actually enforces versus those documented but not enforced, for example email format, digit or length phone, numeric or positive number, date format, string length, and enum membership; the auth requirement per endpoint, including whether a protected endpoint wrongly returns 200 without a token; the authorization behaviour, for example whether one user can read or modify another id's resource; any pagination, filtering, or sorting parameters; and any rate-limit or throttling signals.
-Give me a concise findings summary grouped by module and endpoint. Do not fabricate anything. If any endpoint or spec will not load, say exactly what failed and stop.
-Prompt 2 — Acceptance Criteria
-Act as a Business Analyst. Using your Prompt 1 findings and the workspace user stories as the source of truth, write Given/When/Then acceptance criteria for every user story across all modules, grouped by module and traceable to the validation rules and the expected status codes.
-For each module also write a short end-to-end flow — what a valid journey looks like, request by request, through to the success state. For example: authenticate and receive a token; POST the resource and receive 201 with an id; GET that id and receive 200 with the expected schema; PUT an update and receive 200; DELETE and receive 204; GET the id again and receive 404.
-Save all of this to a file named exactly Application Analysis & Requirements.txt, creating it if missing and appending if it exists, with clear per-module sections. Press Ctrl+S.
-Prompt 3 — Validation Rules
-Using the analysis and acceptance criteria above as context, produce one consolidated validation-rules table covering every field in every request payload across every module, plus the response-level expectations. For each field give the rule, the expected error status code and error message, and whether the API actually enforces it — explicitly mark the rules it does not enforce, for example email format, digit or length phone, numeric or positive values, and date format. Add a status-code matrix: for each endpoint, which status code it should return for a valid request, a validation failure, a missing or bad token, an unauthorized resource, a not-found id, and a malformed body. Express the key rules in Gherkin where it helps.
-Append this as a Validation Rules section to Application Analysis & Requirements.txt. Press Ctrl+S.
-Prompt 4 — Test Case Design
-Act as a senior test designer. Generate the number of test cases the assessment requires (use the stated count, for example 40 to 45, or 60+) covering all user stories across all modules. Save them to a CSV named exactly as the assessment requires (default testcases.csv).
-Columns, in this exact order: TC_ID, Module, User_Story_ID, Test_Scenario, Test_Type, Priority, Precondition, Test_Steps, Test_Data, Expected_Result, Actual_Result, Status.
-For API cases, Test_Steps should name the endpoint and method, Test_Data should hold the request payload and any relevant headers, and Expected_Result should state the expected status code plus the body or schema expectation.
-Rules: every user story must appear at least once; 60 to 70 percent must be negative or validation cases at Critical or High priority; boundary and format-gap cases at Medium, such as a value exactly at a minimum length, a count decremented below zero, an enum or dependent value changed after a related field is set, an alphabetic phone, an email with no at-sign or no TLD, a missing-token attempt, and an expired-token attempt; positive and success cases at Low; include cases that assert the non-enforced rules accept bad input; include explicit authentication, authorization, status-code, and schema-validation cases; leave Actual_Result and Status blank until execution; make the CSV RFC 4180 clean by wrapping any field that contains a comma or line break in double quotes and doubling any internal quotes. Press Ctrl+S.
-Prompt 5 — Automation Framework
-Build a complete API-automation solution using the framework and language you detected in the workspace (default Playwright and TypeScript with a Service Object Model), on top of the existing workspace structure. Do not rename, move, or restructure anything already there, and do not create redundant files.
-Include a config (for Playwright, a playwright.config.ts) with the base URL set from STEP 0 or the spec, a sensible request timeout, the built-in JSON and HTML reporters, and request/response logging or attachment on failure so every result carries evidence. Create one service or client class per module or resource using the real endpoints, paths, and payloads you found in Prompt 1, not guesses. Create reusable helpers: an auth helper that calls the login or token endpoint, caches the token, attaches the correct auth header to every request, and handles a 401 by refreshing or failing clearly; a request builder; a schema validator (ajv, zod, or the framework equivalent) that asserts each response body against the recorded schema; and a build-valid-payload-except-X data helper driven by one valid-data fixture.
-Auth logic: if the endpoints require a token, authenticate first via the helper; if an endpoint is public, call it directly, but still cover the auth or login module's own user stories.
-Implement the exact number of automated test methods the assessment requires, with a sensible per-module split, each with meaningful assertions on the status code, the response body, the schema, and the key headers — prioritising Critical and High validations and the authentication and authorization cases over happy paths. Tag each test with its TC_ID. Use no hard sleeps — use retry or polling for any asynchronous endpoint, and assert any transient or auto-clearing response immediately after the call. Press Ctrl+S.
-Prompt 6 — Execute, Self-Heal and Classify Failures
-Run the full suite from the integrated terminal. Do not assume anything passes — read the actual results. Work autonomously: do not ask me what to do, keep going until the suite is stable.
-For every failing test, first re-inspect the relevant live endpoint by re-sending the request and dumping the status, headers, and body, diagnose the exact root cause, then classify the failure into one of two buckets.
-Bucket A, the failure is caused by the automation: a wrong URL, path, or parameter, a wrong payload or headers, a missing or wrong auth step, a schema that does not match, a wrong assertion that does not match the API's correct behaviour, or an environment issue. Fix the script and re-run that test. Repeat the inspect, fix, re-run loop until every Bucket A test passes. Every automation-caused failure must end up passing.
-Bucket B, the test is correct but the API genuinely misbehaves: it accepts input it should reject, returns the wrong status code or the wrong error or no error, miscalculates, leaks data, is reachable without a token, lets one user touch another's resource, returns 500 on a malformed body, and so on. This is a real defect and a success for your testing, not something to hide. Do not weaken, delete, or flip the assertion to make it green. Confirm the misbehaviour by re-running and by direct inspection, keep the failing test and its evidence (the saved request and response), and note it for the defect report.
-Keep looping until there are no unexplained failures left: every remaining failure is a confirmed Bucket B API defect, and everything else passes. Then give me a short run summary — total, passed, failed — and list which failures are confirmed real API defects, with a one-line reason for each. Press Ctrl+S.
-Prompt 7 — Defect Report
-From the actual results of the run you just executed, not from predictions, produce one consolidated defect report at exactly defects/defect_report.json. Document exactly the number of defects the assessment requires, for example 8 with at least 2 per module, or 5, each taken from a test that actually reproduced it.
-Each defect object has these fields: id, module, user_story_id, related_tc_id, endpoint, method, summary, request (payload plus relevant headers), actual_result (status code plus body), expected_result (status code plus body or schema), severity, priority, evidence (test name plus the saved request/response path), and status. Output valid JSON only, as an array of these objects.
-If you do not yet have enough confirmed real failures to reach the required count, design and run more targeted negative, boundary, and auth tests first to surface additional genuine defects — do not invent defects to reach the number. Likely real API defects to look for: a 200 or 201 returned for invalid input instead of 400 or 422; an email accepted with no at-sign or no TLD; a phone that accepts letters or any length; a numeric or date field that accepts non-numeric or non-date text; a negative or zero amount accepted; a count decremented below zero; a mandatory field not actually enforced; an endpoint reachable without a token (missing authentication); one user able to read or modify another user's resource (broken authorization); the wrong status on a missing id, such as 200 instead of 404; duplicate resource creation allowed with no 409; a 500 on a malformed JSON body; an inconsistent or absent error schema; and a sensitive field leaked in the response, such as a password hash.
-Press Ctrl+S, then run Tekstac Evaluate.
-Final checklist
-(Have the agent confirm before you submit)
- * Application Analysis & Requirements.txt exists with per-module endpoint analysis (method, path, parameters), the full auth flow, the request and response schemas, acceptance criteria, and the validation plus status-code table.
- * The test CSV has the exact name, the exact columns, the required count, every user story, 60 to 70 percent negative at the right priorities, and explicit authentication, authorization, status-code, and schema cases.
- * One service or client class per module plus the auth, schema, and payload helpers; the required number of test methods; meaningful assertions on status, body, schema, and headers; the last full run green except for the confirmed real-defect tests.
- * defects/defect_report.json is valid JSON with the exact required defect count and per-module minimum, every item traceable to an executed request.
- * Workspace structure unchanged; no redundant files; everything saved with Ctrl+S.
+# Tekstac API Automation â€” Fixed Prompt Sequence (REST/JSON, GitHub Copilot or Claude)
 
+A 7-prompt sequence for the Tekstac AI-Augmented QE **API-automation** assessments, built on the same scored skeleton as the UI assessments (Train Reservation, ParaBank, SmartUniversity, College Social Network). It is adaptive: Prompt 1 makes the agent discover the endpoints, base URL, auth flow, user-story ranges, and the real validation behaviour from the workspace spec and the live API, so you do not need the exact question in advance.
+
+Default stack is **Playwright API testing (the `request` fixture) + TypeScript** with a **Service Object Model** (the API equivalent of the Page Object Model). This keeps parity with your UI toolchain. It is swappable â€” REST Assured + Java, pytest + requests, Supertest + Jest, or Karate â€” and Prompt 1 detects and adopts whatever framework the workspace already ships with.
+
+## How to use
+
+Fill STEP 0 (FACTS) from the question on your screen â€” just the numbers and the auth type that carry weightage. Leave anything blank and the agent will read it from the workspace in Prompt 1.
+
+Send Prompt 1 through Prompt 7 in order, one at a time, in your AI chat. Let each finish before sending the next. Copy the plain text under each Prompt heading.
+
+Run Tekstac Evaluate at about 50 percent (after Prompt 4 to 5), about 90 percent (after Prompt 6), and once at the end (after Prompt 7). You get only 3 attempts.
+
+The assessment grades two things: what you analysed and shared with AI, and how you directed your prompts. Each step below is a distinct research, generation, code, or refinement prompt so this is visible.
+
+## Notes
+
+Stack is adaptive but defaults to Playwright + TypeScript with a Service/Client Object Model â€” no page objects, no browser. Build on top of the existing workspace; never rename or restructure it.
+
+There is no DOM and no screenshots here. "Inspection" means hitting endpoints and reading the actual status codes, response bodies, headers, and schemas. Evidence is the saved request/response pairs plus the JSON and HTML report and the terminal logs.
+
+Deliverable names must match the assessment exactly. The UI exams use `testcases.csv` and `defects/defect_report.json` â€” assume the same unless your exam states otherwise, in which case put the real names in STEP 0.
+
+Reports: Playwright's built-in JSON and HTML reporters always work (or the equivalent in whatever framework the workspace uses â€” TestNG/Surefire + Allure for REST Assured, pytest-html for pytest, etc.). Do not block on an optional reporter that needs network.
+
+If the service is **SOAP/XML** rather than REST/JSON, keep the same seven steps but swap JSON-schema validation for XML/XSD validation and assert on SOAP `<Fault>` elements instead of HTTP status codes. Everything below assumes REST/JSON.
+
+---
+
+## STEP 0 â€” FACTS (type these from the on-screen question; blanks are fine)
+
+API / system name: ______
+
+Modules (resource groups, count and names): ______
+
+Base URL (and environment, if given): ______
+
+User-story range(s): US-__ to US-__ (per-module split if shown)
+
+Required test-case count: ______ (UI exams use 40 to 45, or 60+)
+
+Required automated test methods: ______ (UI exams use at least 20, or at least 25)
+
+Required defect count: ______ (UI exams use exactly 8 with at least 2 per module, or 5)
+
+Auth type: ______ (for example Bearer / JWT, API-key header, Basic, OAuth2 client-credentials, session cookie, none) and login/token endpoint if known: ______
+
+Spec / contract present: ______ (OpenAPI or Swagger URL or file, Postman collection, WSDL, README â€” or none)
+
+Test-case file name: testcases.csv
+
+Defect file path: defects/defect_report.json
+
+Framework / language: ______ (default Playwright + TypeScript; blank = detect from workspace)
+
+The agent will confirm and complete all of these from the workspace and the live API in Prompt 1.
+
+---
+
+## Prompt 1 â€” Research, Inspect and Analyze (no code yet)
+
+You are a senior QA automation engineer and SDET working inside this VS Code workspace. Do not write automation or test code yet.
+
+First, read every requirement, user-story, and contract file already in this workspace â€” for example User Stories.txt, any OpenAPI or Swagger file, any Postman collection, any README or assessment file. From them, list the API name, each module or resource group, every endpoint it exposes with its HTTP method and path, and its user-story range. Treat the workspace user stories as the source of truth. Then detect the framework, language, and folder structure that already exist in the workspace and plan to build on them exactly; if the workspace is an empty scaffold, use Playwright and TypeScript with a Service Object Model.
+
+Then inspect the live API yourself. Write one throwaway script, saved under a temp or scratch folder and deleted when done, that for every endpoint sends a representative set of requests â€” a valid request, an invalid one with a missing required field, one with a wrong data type, one with no authentication, and one with a bad or expired token â€” and prints for each: the method, the full URL, the request headers and body, the response status code, the response headers (especially Content-Type), and the full response body. Resolve the authentication flow end to end in the same script: call the login or token endpoint, capture the token, show exactly which header carries it and in what format, then prove a protected endpoint succeeds with that token and fails without it. Run the script from the integrated terminal and read its output.
+
+From the actual responses, not from guesses, record for each module and endpoint: the method, path, and any path or query parameters; the required versus optional request-body fields and their data types; the exact success status code and the success response schema; the exact error status code and the error response schema or message shape; which validations the server actually enforces versus those documented but not enforced, for example email format, digit or length phone, numeric or positive number, date format, string length, and enum membership; the auth requirement per endpoint, including whether a protected endpoint wrongly returns 200 without a token; the authorization behaviour, for example whether one user can read or modify another id's resource; any pagination, filtering, or sorting parameters; and any rate-limit or throttling signals.
+
+Give me a concise findings summary grouped by module and endpoint. Do not fabricate anything. If any endpoint or spec will not load, say exactly what failed and stop.
+
+---
+
+## Prompt 2 â€” Acceptance Criteria
+
+Act as a Business Analyst. Using your Prompt 1 findings and the workspace user stories as the source of truth, write Given/When/Then acceptance criteria for every user story across all modules, grouped by module and traceable to the validation rules and the expected status codes.
+
+For each module also write a short end-to-end flow â€” what a valid journey looks like, request by request, through to the success state. For example: authenticate and receive a token; POST the resource and receive 201 with an id; GET that id and receive 200 with the expected schema; PUT an update and receive 200; DELETE and receive 204; GET the id again and receive 404.
+
+Save all of this to a file named exactly `Application Analysis & Requirements.txt`, creating it if missing and appending if it exists, with clear per-module sections. Press Ctrl+S.
+
+---
+
+## Prompt 3 â€” Validation Rules
+
+Using the analysis and acceptance criteria above as context, produce one consolidated validation-rules table covering every field in every request payload across every module, plus the response-level expectations. For each field give the rule, the expected error status code and error message, and whether the API actually enforces it â€” explicitly mark the rules it does not enforce, for example email format, digit or length phone, numeric or positive values, and date format. Add a status-code matrix: for each endpoint, which status code it should return for a valid request, a validation failure, a missing or bad token, an unauthorized resource, a not-found id, and a malformed body. Express the key rules in Gherkin where it helps.
+
+Append this as a Validation Rules section to `Application Analysis & Requirements.txt`. Press Ctrl+S.
+
+---
+
+## Prompt 4 â€” Test Case Design
+
+Act as a senior test designer. Generate the number of test cases the assessment requires (use the stated count, for example 40 to 45, or 60+) covering all user stories across all modules. Save them to a CSV named exactly as the assessment requires (default `testcases.csv`).
+
+Columns, in this exact order: TC_ID, Module, User_Story_ID, Test_Scenario, Test_Type, Priority, Precondition, Test_Steps, Test_Data, Expected_Result, Actual_Result, Status.
+
+For API cases, Test_Steps should name the endpoint and method, Test_Data should hold the request payload and any relevant headers, and Expected_Result should state the expected status code plus the body or schema expectation.
+
+Rules: every user story must appear at least once; 60 to 70 percent must be negative or validation cases at Critical or High priority; boundary and format-gap cases at Medium, such as a value exactly at a minimum length, a count decremented below zero, an enum or dependent value changed after a related field is set, an alphabetic phone, an email with no at-sign or no TLD, a missing-token attempt, and an expired-token attempt; positive and success cases at Low; include cases that assert the non-enforced rules accept bad input; include explicit authentication, authorization, status-code, and schema-validation cases; leave Actual_Result and Status blank until execution; make the CSV RFC 4180 clean by wrapping any field that contains a comma or line break in double quotes and doubling any internal quotes. Press Ctrl+S.
+
+---
+
+## Prompt 5 â€” Automation Framework
+
+Build a complete API-automation solution using the framework and language you detected in the workspace (default Playwright and TypeScript with a Service Object Model), on top of the existing workspace structure. Do not rename, move, or restructure anything already there, and do not create redundant files.
+
+Include a config (for Playwright, a `playwright.config.ts`) with the base URL set from STEP 0 or the spec, a sensible request timeout, the built-in JSON and HTML reporters, and request/response logging or attachment on failure so every result carries evidence. Create one service or client class per module or resource using the real endpoints, paths, and payloads you found in Prompt 1, not guesses. Create reusable helpers: an auth helper that calls the login or token endpoint, caches the token, attaches the correct auth header to every request, and handles a 401 by refreshing or failing clearly; a request builder; a schema validator (ajv, zod, or the framework equivalent) that asserts each response body against the recorded schema; and a build-valid-payload-except-X data helper driven by one valid-data fixture.
+
+Auth logic: if the endpoints require a token, authenticate first via the helper; if an endpoint is public, call it directly, but still cover the auth or login module's own user stories.
+
+Implement the exact number of automated test methods the assessment requires, with a sensible per-module split, each with meaningful assertions on the status code, the response body, the schema, and the key headers â€” prioritising Critical and High validations and the authentication and authorization cases over happy paths. Tag each test with its TC_ID. Use no hard sleeps â€” use retry or polling for any asynchronous endpoint, and assert any transient or auto-clearing response immediately after the call. Press Ctrl+S.
+
+---
+
+## Prompt 6 â€” Execute, Self-Heal and Classify Failures
+
+Run the full suite from the integrated terminal. Do not assume anything passes â€” read the actual results. Work autonomously: do not ask me what to do, keep going until the suite is stable.
+
+For every failing test, first re-inspect the relevant live endpoint by re-sending the request and dumping the status, headers, and body, diagnose the exact root cause, then classify the failure into one of two buckets.
+
+Bucket A, the failure is caused by the automation: a wrong URL, path, or parameter, a wrong payload or headers, a missing or wrong auth step, a schema that does not match, a wrong assertion that does not match the API's correct behaviour, or an environment issue. Fix the script and re-run that test. Repeat the inspect, fix, re-run loop until every Bucket A test passes. Every automation-caused failure must end up passing.
+
+Bucket B, the test is correct but the API genuinely misbehaves: it accepts input it should reject, returns the wrong status code or the wrong error or no error, miscalculates, leaks data, is reachable without a token, lets one user touch another's resource, returns 500 on a malformed body, and so on. This is a real defect and a success for your testing, not something to hide. Do not weaken, delete, or flip the assertion to make it green. Confirm the misbehaviour by re-running and by direct inspection, keep the failing test and its evidence (the saved request and response), and note it for the defect report.
+
+Keep looping until there are no unexplained failures left: every remaining failure is a confirmed Bucket B API defect, and everything else passes. Then give me a short run summary â€” total, passed, failed â€” and list which failures are confirmed real API defects, with a one-line reason for each. Press Ctrl+S.
+
+---
+
+## Prompt 7 â€” Defect Report
+
+From the actual results of the run you just executed, not from predictions, produce one consolidated defect report at exactly `defects/defect_report.json`. Document exactly the number of defects the assessment requires, for example 8 with at least 2 per module, or 5, each taken from a test that actually reproduced it.
+
+Each defect object has these fields: id, module, user_story_id, related_tc_id, endpoint, method, summary, request (payload plus relevant headers), actual_result (status code plus body), expected_result (status code plus body or schema), severity, priority, evidence (test name plus the saved request/response path), and status. Output valid JSON only, as an array of these objects.
+
+If you do not yet have enough confirmed real failures to reach the required count, design and run more targeted negative, boundary, and auth tests first to surface additional genuine defects â€” do not invent defects to reach the number. Likely real API defects to look for: a 200 or 201 returned for invalid input instead of 400 or 422; an email accepted with no at-sign or no TLD; a phone that accepts letters or any length; a numeric or date field that accepts non-numeric or non-date text; a negative or zero amount accepted; a count decremented below zero; a mandatory field not actually enforced; an endpoint reachable without a token (missing authentication); one user able to read or modify another user's resource (broken authorization); the wrong status on a missing id, such as 200 instead of 404; duplicate resource creation allowed with no 409; a 500 on a malformed JSON body; an inconsistent or absent error schema; and a sensitive field leaked in the response, such as a password hash.
+
+Press Ctrl+S, then run Tekstac Evaluate.
+
+---
+
+## Final checklist (have the agent confirm before you submit)
+
+`Application Analysis & Requirements.txt` exists with per-module endpoint analysis (method, path, parameters), the full auth flow, the request and response schemas, acceptance criteria, and the validation plus status-code table.
+
+The test CSV has the exact name, the exact columns, the required count, every user story, 60 to 70 percent negative at the right priorities, and explicit authentication, authorization, status-code, and schema cases.
+
+One service or client class per module plus the auth, schema, and payload helpers; the required number of test methods; meaningful assertions on status, body, schema, and headers; the last full run green except for the confirmed real-defect tests.
+
+`defects/defect_report.json` is valid JSON with the exact required defect count and per-module minimum, every item traceable to an executed request.
+
+Workspace structure unchanged; no redundant files; everything saved with Ctrl+S.
