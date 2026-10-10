@@ -1,8 +1,17 @@
-# Tekstac API Automation â€” Fixed Prompt Sequence (REST/JSON, GitHub Copilot or Claude)
+# Tekstac API Automation â€” Fixed Prompt Sequence (Playwright + TypeScript + Supertest + Jest + Axios)
 
-A 7-prompt sequence for the Tekstac AI-Augmented QE **API-automation** assessments, built on the same scored skeleton as the UI assessments (Train Reservation, ParaBank, SmartUniversity, College Social Network). It is adaptive: Prompt 1 makes the agent discover the endpoints, base URL, auth flow, user-story ranges, and the real validation behaviour from the workspace spec and the live API, so you do not need the exact question in advance.
+A 7-prompt sequence for the Tekstac AI-Augmented QE **API-automation** assessments, built on the same scored skeleton as the UI assessments (Train Reservation, ParaBank, SmartUniversity, College Social Network). It is adaptive about the API itself: Prompt 1 makes the agent discover the endpoints, base URL, auth flow, user-story ranges, and the real validation behaviour from the workspace spec and the live API, so you do not need the exact question in advance.
 
-Default stack is **Playwright API testing (the `request` fixture) + TypeScript** with a **Service Object Model** (the API equivalent of the Page Object Model). This keeps parity with your UI toolchain. It is swappable â€” REST Assured + Java, pytest + requests, Supertest + Jest, or Karate â€” and Prompt 1 detects and adopts whatever framework the workspace already ships with.
+**The stack is fixed** â€” it does not adapt to the workspace. Build this stack on top of the existing workspace structure; never rename or restructure it.
+
+## Stack (fixed) and tool roles
+
+- **TypeScript** â€” the language (transpiled by ts-jest).
+- **Jest** â€” the single test runner and assertion library (`describe` / `it` / `expect`). Do not add a second runner.
+- **Axios** â€” the HTTP client. One configured instance (baseURL, timeout) with interceptors that attach the auth token and log every request/response to an evidence folder; the service/client classes are built on it.
+- **Supertest** â€” fluent endpoint assertions, e.g. `request(baseURL).post(path).set(headers).send(body).expect(status)`; it targets the live base URL as a string.
+- **Playwright** â€” used **only** via `APIRequestContext` (`request.newContext`) to capture HAR/trace evidence and as a backup client. **Not** a test runner â€” do not introduce `@playwright/test`'s `test()`.
+- **Reports** â€” Jest's built-in results plus `--json` output for a machine-readable summary, `jest-html-reporter` for HTML, and optionally `jest-junit` for JUnit XML. Install the extra reporters only if the network allows; do not block on them.
 
 ## How to use
 
@@ -16,15 +25,11 @@ The assessment grades two things: what you analysed and shared with AI, and how 
 
 ## Notes
 
-Stack is adaptive but defaults to Playwright + TypeScript with a Service/Client Object Model â€” no page objects, no browser. Build on top of the existing workspace; never rename or restructure it.
-
-There is no DOM and no screenshots here. "Inspection" means hitting endpoints and reading the actual status codes, response bodies, headers, and schemas. Evidence is the saved request/response pairs plus the JSON and HTML report and the terminal logs.
+There is no DOM and no browser here. "Inspection" means hitting endpoints and reading the actual status codes, response bodies, headers, and schemas. Evidence is the saved request/response pairs (written by the Axios interceptor) plus the HAR captured via Playwright, the HTML report, and the terminal logs.
 
 Deliverable names must match the assessment exactly. The UI exams use `testcases.csv` and `defects/defect_report.json` â€” assume the same unless your exam states otherwise, in which case put the real names in STEP 0.
 
-Reports: Playwright's built-in JSON and HTML reporters always work (or the equivalent in whatever framework the workspace uses â€” TestNG/Surefire + Allure for REST Assured, pytest-html for pytest, etc.). Do not block on an optional reporter that needs network.
-
-If the service is **SOAP/XML** rather than REST/JSON, keep the same seven steps but swap JSON-schema validation for XML/XSD validation and assert on SOAP `<Fault>` elements instead of HTTP status codes. Everything below assumes REST/JSON.
+If the service is **SOAP/XML** rather than REST/JSON, keep the same seven steps and the same stack but swap JSON-schema (ajv) validation for XML/XSD validation, send XML bodies through Axios/Supertest, and assert on SOAP `<Fault>` elements instead of HTTP status codes. Everything below assumes REST/JSON.
 
 ---
 
@@ -52,9 +57,9 @@ Test-case file name: testcases.csv
 
 Defect file path: defects/defect_report.json
 
-Framework / language: ______ (default Playwright + TypeScript; blank = detect from workspace)
+Stack: FIXED â€” Playwright + TypeScript + Supertest + Jest + Axios (do not change)
 
-The agent will confirm and complete all of these from the workspace and the live API in Prompt 1.
+The agent will confirm and complete all of the facts above from the workspace and the live API in Prompt 1.
 
 ---
 
@@ -62,9 +67,9 @@ The agent will confirm and complete all of these from the workspace and the live
 
 You are a senior QA automation engineer and SDET working inside this VS Code workspace. Do not write automation or test code yet.
 
-First, read every requirement, user-story, and contract file already in this workspace â€” for example User Stories.txt, any OpenAPI or Swagger file, any Postman collection, any README or assessment file. From them, list the API name, each module or resource group, every endpoint it exposes with its HTTP method and path, and its user-story range. Treat the workspace user stories as the source of truth. Then detect the framework, language, and folder structure that already exist in the workspace and plan to build on them exactly; if the workspace is an empty scaffold, use Playwright and TypeScript with a Service Object Model.
+First, read every requirement, user-story, and contract file already in this workspace â€” for example User Stories.txt, any OpenAPI or Swagger file, any Postman collection, any README or assessment file. From them, list the API name, each module or resource group, every endpoint it exposes with its HTTP method and path, and its user-story range. Treat the workspace user stories as the source of truth. The implementation stack is fixed â€” TypeScript with Jest as the runner, Axios as the HTTP client, Supertest for endpoint assertions, and Playwright's APIRequestContext for evidence â€” so inspect the existing workspace structure (package.json, tsconfig.json, existing folders) and plan to build this stack on top of it exactly, without restructuring; note what is already installed versus what you will need to add.
 
-Then inspect the live API yourself. Write one throwaway script, saved under a temp or scratch folder and deleted when done, that for every endpoint sends a representative set of requests â€” a valid request, an invalid one with a missing required field, one with a wrong data type, one with no authentication, and one with a bad or expired token â€” and prints for each: the method, the full URL, the request headers and body, the response status code, the response headers (especially Content-Type), and the full response body. Resolve the authentication flow end to end in the same script: call the login or token endpoint, capture the token, show exactly which header carries it and in what format, then prove a protected endpoint succeeds with that token and fails without it. Run the script from the integrated terminal and read its output.
+Then inspect the live API yourself. Write one throwaway script, using plain Axios or node and saved under a temp or scratch folder and deleted when done, that for every endpoint sends a representative set of requests â€” a valid request, an invalid one with a missing required field, one with a wrong data type, one with no authentication, and one with a bad or expired token â€” and prints for each: the method, the full URL, the request headers and body, the response status code, the response headers (especially Content-Type), and the full response body. Resolve the authentication flow end to end in the same script: call the login or token endpoint, capture the token, show exactly which header carries it and in what format, then prove a protected endpoint succeeds with that token and fails without it. Run the script from the integrated terminal and read its output.
 
 From the actual responses, not from guesses, record for each module and endpoint: the method, path, and any path or query parameters; the required versus optional request-body fields and their data types; the exact success status code and the success response schema; the exact error status code and the error response schema or message shape; which validations the server actually enforces versus those documented but not enforced, for example email format, digit or length phone, numeric or positive number, date format, string length, and enum membership; the auth requirement per endpoint, including whether a protected endpoint wrongly returns 200 without a token; the authorization behaviour, for example whether one user can read or modify another id's resource; any pagination, filtering, or sorting parameters; and any rate-limit or throttling signals.
 
@@ -104,25 +109,33 @@ Rules: every user story must appear at least once; 60 to 70 percent must be nega
 
 ## Prompt 5 â€” Automation Framework
 
-Build a complete API-automation solution using the framework and language you detected in the workspace (default Playwright and TypeScript with a Service Object Model), on top of the existing workspace structure. Do not rename, move, or restructure anything already there, and do not create redundant files.
+Build a complete API-automation solution using the fixed stack â€” TypeScript, Jest (runner and assertions), Axios (HTTP client), Supertest (endpoint assertions), and Playwright's APIRequestContext (evidence) â€” on top of the existing workspace structure. Do not rename, move, or restructure anything already there, and do not create redundant files, and do not add a second test runner.
 
-Include a config (for Playwright, a `playwright.config.ts`) with the base URL set from STEP 0 or the spec, a sensible request timeout, the built-in JSON and HTML reporters, and request/response logging or attachment on failure so every result carries evidence. Create one service or client class per module or resource using the real endpoints, paths, and payloads you found in Prompt 1, not guesses. Create reusable helpers: an auth helper that calls the login or token endpoint, caches the token, attaches the correct auth header to every request, and handles a 401 by refreshing or failing clearly; a request builder; a schema validator (ajv, zod, or the framework equivalent) that asserts each response body against the recorded schema; and a build-valid-payload-except-X data helper driven by one valid-data fixture.
+Install only what is missing: typescript, ts-jest, @types/jest, jest, supertest, @types/supertest, axios, ajv (or zod) for schema validation, @playwright/test, and optionally jest-html-reporter and jest-junit for reports â€” skip the extra reporters if they will not install without network.
+
+Config: a `jest.config.ts` using the ts-jest preset, a sensible testTimeout, and the reporters (default plus jest-html-reporter for an HTML report, plus jest-junit for a JUnit XML) when they install. Put the base URL from STEP 0 or the spec in one config or env module.
+
+HTTP client and Service Object Model: create one configured Axios instance (baseURL, timeout) with a request interceptor that attaches the auth header and a response-plus-error interceptor that writes every request/response pair â€” method, URL, headers, body, status â€” to an evidence folder, so each result carries proof. Build one service or client class per module or resource on top of this Axios instance, using the real endpoints, paths, and payloads you found in Prompt 1, not guesses.
+
+Helpers: an auth helper that calls the login or token endpoint via Axios, caches the token, feeds it to the interceptor, and handles a 401 by refreshing or failing clearly; a request builder; a schema validator built on ajv (or zod) whose result you assert with Jest `expect`; and a build-valid-payload-except-X data helper driven by one valid-data fixture.
+
+Assertion styles: use Supertest for the fluent endpoint tests â€” `request(baseURL).<method>(path).set(headers).send(body).expect(status)` then assert the body and schema â€” and use the Axios service classes for flows that chain calls (create, read, update, delete) with Jest `expect` on the status, body, schema, and key headers. Capture a representative HAR via Playwright's `APIRequestContext` (`request.newContext({ baseURL })`) for evidence; do not use the Playwright test runner.
 
 Auth logic: if the endpoints require a token, authenticate first via the helper; if an endpoint is public, call it directly, but still cover the auth or login module's own user stories.
 
-Implement the exact number of automated test methods the assessment requires, with a sensible per-module split, each with meaningful assertions on the status code, the response body, the schema, and the key headers â€” prioritising Critical and High validations and the authentication and authorization cases over happy paths. Tag each test with its TC_ID. Use no hard sleeps â€” use retry or polling for any asynchronous endpoint, and assert any transient or auto-clearing response immediately after the call. Press Ctrl+S.
+Implement the exact number of automated test methods the assessment requires (each a Jest `test` or `it`), with a sensible per-module split, each tagged with its TC_ID in the test title, each with meaningful assertions on the status code, the response body, the schema, and the key headers â€” prioritising Critical and High validations and the authentication and authorization cases over happy paths. Use no hard sleeps â€” poll or retry for any asynchronous endpoint, and assert any transient response immediately after the call. Press Ctrl+S.
 
 ---
 
 ## Prompt 6 â€” Execute, Self-Heal and Classify Failures
 
-Run the full suite from the integrated terminal. Do not assume anything passes â€” read the actual results. Work autonomously: do not ask me what to do, keep going until the suite is stable.
+Run the full suite from the integrated terminal with `npx jest`. Do not assume anything passes â€” read the actual results. Work autonomously: do not ask me what to do, keep going until the suite is stable.
 
-For every failing test, first re-inspect the relevant live endpoint by re-sending the request and dumping the status, headers, and body, diagnose the exact root cause, then classify the failure into one of two buckets.
+For every failing test, first re-inspect the relevant live endpoint by re-sending the request (via Axios or your throwaway probe) and dumping the status, headers, and body, diagnose the exact root cause, then classify the failure into one of two buckets.
 
 Bucket A, the failure is caused by the automation: a wrong URL, path, or parameter, a wrong payload or headers, a missing or wrong auth step, a schema that does not match, a wrong assertion that does not match the API's correct behaviour, or an environment issue. Fix the script and re-run that test. Repeat the inspect, fix, re-run loop until every Bucket A test passes. Every automation-caused failure must end up passing.
 
-Bucket B, the test is correct but the API genuinely misbehaves: it accepts input it should reject, returns the wrong status code or the wrong error or no error, miscalculates, leaks data, is reachable without a token, lets one user touch another's resource, returns 500 on a malformed body, and so on. This is a real defect and a success for your testing, not something to hide. Do not weaken, delete, or flip the assertion to make it green. Confirm the misbehaviour by re-running and by direct inspection, keep the failing test and its evidence (the saved request and response), and note it for the defect report.
+Bucket B, the test is correct but the API genuinely misbehaves: it accepts input it should reject, returns the wrong status code or the wrong error or no error, miscalculates, leaks data, is reachable without a token, lets one user touch another's resource, returns 500 on a malformed body, and so on. This is a real defect and a success for your testing, not something to hide. Do not weaken, delete, or flip the assertion to make it green. Confirm the misbehaviour by re-running and by direct inspection, keep the failing test and its evidence (the saved request and response, and the HAR), and note it for the defect report.
 
 Keep looping until there are no unexplained failures left: every remaining failure is a confirmed Bucket B API defect, and everything else passes. Then give me a short run summary â€” total, passed, failed â€” and list which failures are confirmed real API defects, with a one-line reason for each. Press Ctrl+S.
 
@@ -132,7 +145,7 @@ Keep looping until there are no unexplained failures left: every remaining failu
 
 From the actual results of the run you just executed, not from predictions, produce one consolidated defect report at exactly `defects/defect_report.json`. Document exactly the number of defects the assessment requires, for example 8 with at least 2 per module, or 5, each taken from a test that actually reproduced it.
 
-Each defect object has these fields: id, module, user_story_id, related_tc_id, endpoint, method, summary, request (payload plus relevant headers), actual_result (status code plus body), expected_result (status code plus body or schema), severity, priority, evidence (test name plus the saved request/response path), and status. Output valid JSON only, as an array of these objects.
+Each defect object has these fields: id, module, user_story_id, related_tc_id, endpoint, method, summary, request (payload plus relevant headers), actual_result (status code plus body), expected_result (status code plus body or schema), severity, priority, evidence (test name plus the saved request/response or HAR path), and status. Output valid JSON only, as an array of these objects.
 
 If you do not yet have enough confirmed real failures to reach the required count, design and run more targeted negative, boundary, and auth tests first to surface additional genuine defects â€” do not invent defects to reach the number. Likely real API defects to look for: a 200 or 201 returned for invalid input instead of 400 or 422; an email accepted with no at-sign or no TLD; a phone that accepts letters or any length; a numeric or date field that accepts non-numeric or non-date text; a negative or zero amount accepted; a count decremented below zero; a mandatory field not actually enforced; an endpoint reachable without a token (missing authentication); one user able to read or modify another user's resource (broken authorization); the wrong status on a missing id, such as 200 instead of 404; duplicate resource creation allowed with no 409; a 500 on a malformed JSON body; an inconsistent or absent error schema; and a sensitive field leaked in the response, such as a password hash.
 
@@ -146,8 +159,8 @@ Press Ctrl+S, then run Tekstac Evaluate.
 
 The test CSV has the exact name, the exact columns, the required count, every user story, 60 to 70 percent negative at the right priorities, and explicit authentication, authorization, status-code, and schema cases.
 
-One service or client class per module plus the auth, schema, and payload helpers; the required number of test methods; meaningful assertions on status, body, schema, and headers; the last full run green except for the confirmed real-defect tests.
+The stack is exactly Jest (runner and assertions) plus Axios (client and evidence logging) plus Supertest (endpoint assertions) plus Playwright `APIRequestContext` (HAR evidence); a `jest.config.ts` runs the suite; one service or client class per module plus the auth, schema, and payload helpers; the required number of Jest test methods; meaningful assertions on status, body, schema, and headers; the last full run green except for the confirmed real-defect tests.
 
-`defects/defect_report.json` is valid JSON with the exact required defect count and per-module minimum, every item traceable to an executed request.
+`defects/defect_report.json` is valid JSON with the exact required defect count and per-module minimum, every item traceable to an executed request, with the saved request/response or HAR as evidence.
 
 Workspace structure unchanged; no redundant files; everything saved with Ctrl+S.
